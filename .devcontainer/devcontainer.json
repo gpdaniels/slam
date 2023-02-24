@@ -1,0 +1,31 @@
+{
+    "name": "slam",
+    "build": {
+        "dockerfile": "../Dockerfile",
+        "args": {
+            "BUILDKIT_INLINE_CACHE": "0"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack",
+                "twxs.cmake",
+                "ms-vscode.cmake-tools",
+                "ms-vscode.cpptools-themes"
+            ]
+        }
+    },
+    "runArgs": [
+      "--network=host",
+      "--env", "DISPLAY=${env:DISPLAY}",
+      "--env", "LIBGL_DRI3_DISABLE=1",
+      "--mount", "type=bind,source=/tmp/.X11-unix,target=/tmp/.X11-unix",
+      "--mount", "type=bind,source=${env:XAUTHORITY},target=/root/.Xauthority",
+      "--device=/dev/dri:/dev/dri",
+      "--device=/dev/video0:/dev/video0"
+    ],
+    "workspaceFolder": "/slam",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/slam,type=bind"
+}
