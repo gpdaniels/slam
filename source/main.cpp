@@ -483,6 +483,7 @@ public:
             std::fprintf(stderr, "ERROR: GLFW failed to initialize");
             exit(1);
         }
+        glfwWindowHint(GLFW_MAXIMIZED , GL_TRUE);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
         this->window = glfwCreateWindow(width, height, "slam", nullptr, nullptr);
@@ -490,6 +491,18 @@ public:
         glfwSetWindowCloseCallback(this->window, [](GLFWwindow *window) { glfwSetWindowShouldClose(window, GL_TRUE); });
         glfwMakeContextCurrent(this->window);
         glGenTextures(1, &this->image_texture);
+    }
+
+    cv::Mat capture() {
+        glfwMakeContextCurrent(this->window);
+        int width, height;
+        glfwGetFramebufferSize(this->window, &width, &height);
+        width = (width / 8) * 8;
+        glReadBuffer(GL_FRONT);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        cv::Mat pixels(height, width, CV_8UC3);
+        glReadPixels(0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE, pixels.data);
+        return pixels;
     }
 
     void render(const Map& mapp) {
@@ -734,6 +747,12 @@ int main(int argc, char* argv[]) {
             display.render(slam.mapp);
             std::chrono::duration<double> frame_duration = std::chrono::steady_clock::now() - start;
             std::printf("Rendering time: %f seconds\n", frame_duration.count());
+        }
+        if (0) {
+            cv::Mat capture = display.capture();
+            cv::flip(capture, capture, 0);
+            static cv::VideoWriter video("output.avi", cv::VideoWriter::fourcc('M','J','P','G'), 10, cv::Size(capture.cols, capture.rows));
+            video.write(capture);
         }
         std::printf("\n");
     }
