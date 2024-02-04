@@ -34,12 +34,12 @@ public:
     cv::Matx31d translation;
 public:
     Frame() = default;
-    Frame(const cv::Mat& image_grey, const cv::Matx33d& K, const cv::Mat& dist) {
+    Frame(const cv::Mat& input_image_grey, const cv::Matx33d& input_K, const cv::Mat& input_dist) {
         static cv::Ptr<cv::ORB> extractor = cv::ORB::create();
         this->id = Frame::id_generator++;
-        this->image_grey = image_grey;
-        this->K = K;
-        this->dist = dist;
+        this->image_grey = input_image_grey;
+        this->K = input_K;
+        this->dist = input_dist;
         std::vector<cv::Point2f> corners;
         cv::goodFeaturesToTrack(image_grey, corners, 3000, 0.01, 7);
         this->kps.reserve(corners.size());
@@ -61,10 +61,10 @@ public:
     cv::Matx31d colour;
 public:
     Landmark() = default;
-    Landmark(const cv::Matx31d& location, const cv::Matx31d& colour) {
+    Landmark(const cv::Matx31d& input_location, const cv::Matx31d& input_colour) {
         this->id = Landmark::id_generator++;
-        this->location = location;
-        this->colour = colour;
+        this->location = input_location;
+        this->colour = input_colour;
     }
 };
 
@@ -174,7 +174,7 @@ public:
                     continue;
                 }
                 const Frame& frame = frames.at(frame_id);
-                const cv::Point2f& cvkp = frame.kps[kp_index].pt;
+                const cv::Point2f& cvkp = frame.kps[static_cast<unsigned int>(kp_index)].pt;
                 const cv::Matx33d& cvk = frame.K;
                 g2o::EdgeSE3ProjectXYZ* edge = new g2o::EdgeSE3ProjectXYZ();
                 edge->setVertex(0, opt.vertex(landmark_id_start + landmark_id));
@@ -227,7 +227,7 @@ public:
     }
 
     void cull() {
-        const int landmarks_before_cull = this->landmarks.size();
+        const size_t landmarks_before_cull = this->landmarks.size();
         for (std::unordered_map<int, Landmark>::iterator it = this->landmarks.begin(); it != this->landmarks.end();) {
             const std::pair<int, Landmark>& landmark = *it;
             const std::vector<std::pair<int, int>>& landmark_observations = this->observations.at(landmark.first);
@@ -241,21 +241,21 @@ public:
             float reprojection_error = 0.0f;
             for (const auto& [frame_id, kp_index] : landmark_observations) {
                 const Frame& frame = this->frames.at(frame_id);
-                const cv::Matx21d measured = {frame.kps[kp_index].pt.x, frame.kps[kp_index].pt.y};
+                const cv::Matx21d measured = {static_cast<double>(frame.kps[static_cast<unsigned int>(kp_index)].pt.x), static_cast<double>(frame.kps[static_cast<unsigned int>(kp_index)].pt.y)};
                 const cv::Matx31d mapped = frame.K * ((frame.rotation * landmark.second.location) + frame.translation);
                 const cv::Matx21d reprojected{mapped(0) / mapped(2), mapped(1) / mapped(2)};
-                reprojection_error += cv::norm(measured - reprojected);
+                reprojection_error += static_cast<float>(cv::norm(measured - reprojected));
             }
             reprojection_error /= static_cast<float>(landmark_observations.size());
-            if (reprojection_error > 5.991) {
+            if (reprojection_error > 5.991f) {
                 this->observations.erase(landmark.first);
                 it = this->landmarks.erase(it);
                 continue;
             }
             ++it;
         }
-        const int landmarks_after_cull = this->landmarks.size();
-        std::printf("Culled: %d points\n", landmarks_before_cull - landmarks_after_cull);
+        const size_t landmarks_after_cull = this->landmarks.size();
+        std::printf("Culled: %zu points\n", landmarks_before_cull - landmarks_after_cull);
     }
 };
 
@@ -277,7 +277,7 @@ public:
         // Helper functions for filtering matches.
         constexpr static const auto ratio_test = [](std::vector<std::vector<cv::DMatch>>& matches) {
             matches.erase(std::remove_if(matches.begin(), matches.end(), [](const std::vector<cv::DMatch>& options){
-                return ((options.size() <= 1) || ((options[0].distance / options[1].distance) > 0.75));
+                return ((options.size() <= 1) || ((options[0].distance / options[1].distance) > 0.75f));
             }), matches.end());
         };
         constexpr static const auto symmetry_test = [](const std::vector<std::vector<cv::DMatch>> &matches1, const std::vector<std::vector<cv::DMatch>> &matches2, std::vector<std::vector<cv::DMatch>>& symMatches) {
@@ -309,9 +309,9 @@ public:
         for (const std::vector<cv::DMatch>& match : matches) {
             const cv::DMatch& m = match[0];
             match_index_current.push_back(m.queryIdx);
-            match_point_current.push_back({frame_current.kps[m.queryIdx].pt.x, frame_current.kps[m.queryIdx].pt.y});
+            match_point_current.push_back({static_cast<double>(frame_current.kps[static_cast<unsigned int>(m.queryIdx)].pt.x), static_cast<double>(frame_current.kps[static_cast<unsigned int>(m.queryIdx)].pt.y)});
             match_index_previous.push_back(m.trainIdx);
-            match_point_previous.push_back({frame_previous.kps[m.trainIdx].pt.x, frame_previous.kps[m.trainIdx].pt.y});
+            match_point_previous.push_back({static_cast<double>(frame_previous.kps[static_cast<unsigned int>(m.trainIdx)].pt.x), static_cast<double>(frame_previous.kps[static_cast<unsigned int>(m.trainIdx)].pt.y)});
         }
         std::printf("Matched: %zu features to previous frame\n", matches.size());
         // Pose estimation of new frame.
@@ -414,7 +414,7 @@ public:
             auto found_point = frame_previous_points.find(match_index_previous[i]);
             if (found_point == frame_previous_points.end()) {
                 // New landmark to be triangulated.
-                cv::Matx41d point = Map::triangulate(frame_current, frame_previous, frame_current.kps[match_index_current[i]].pt, frame_previous.kps[match_index_previous[i]].pt);
+                cv::Matx41d point = Map::triangulate(frame_current, frame_previous, frame_current.kps[static_cast<unsigned int>(match_index_current[i])].pt, frame_previous.kps[static_cast<unsigned int>(match_index_previous[i])].pt);
                 // Valid triangulation?
                 if (std::abs(point(3)) < 1e-5) {
                     continue;
@@ -439,7 +439,7 @@ public:
                     continue;
                 }
                 // Add it.
-                double colour = static_cast<double>(image_grey.at<unsigned char>(frame_current.kps[match_index_current[i]].pt)) / 255.0;
+                double colour = static_cast<double>(image_grey.at<unsigned char>(frame_current.kps[static_cast<unsigned int>(match_index_current[i])].pt)) / 255.0;
                 Landmark landmark(pt, cv::Matx31d{colour, colour, colour});
                 this->mapp.add_landmark(landmark);
                 this->mapp.add_observation(frame_previous, landmark, match_index_previous[i]);
@@ -470,7 +470,7 @@ class Display {
 public:
     GLFWwindow* window = nullptr;
     GLuint image_texture;
-    float image_frame[3] = { -0.9, 0.9, 0.4 };
+    float image_frame[3] = { -0.9f, 0.9f, 0.4f };
 
 public:
     ~Display() {
@@ -487,8 +487,8 @@ public:
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
         this->window = glfwCreateWindow(width, height, "slam", nullptr, nullptr);
-        glfwSetFramebufferSizeCallback(this->window, [](GLFWwindow*, int width, int height){ glViewport(0, 0, width, height); });
-        glfwSetWindowCloseCallback(this->window, [](GLFWwindow *window) { glfwSetWindowShouldClose(window, GL_TRUE); });
+        glfwSetFramebufferSizeCallback(this->window, [](GLFWwindow*, int new_width, int new_height){ glViewport(0, 0, new_width, new_height); });
+        glfwSetWindowCloseCallback(this->window, [](GLFWwindow* window_closing) { glfwSetWindowShouldClose(window_closing, GL_TRUE); });
         glfwMakeContextCurrent(this->window);
         glGenTextures(1, &this->image_texture);
     }
@@ -511,10 +511,10 @@ public:
         glfwGetFramebufferSize(this->window, &width, &height);
         glViewport(0, 0, width, height);
         // Get the last frame processed.
-        const Frame& frame = mapp.frames.at(Frame::id_generator - 1);
+        const Frame& frame_last_processed = mapp.frames.at(Frame::id_generator - 1);
         // Calculate the width and height of the inset image.
-        const float ratio_image = ((float)frame.image_grey.cols / (float)frame.image_grey.rows);
-        const float ratio_screen = ((float)width / (float)height);
+        const float ratio_image = (static_cast<float>(frame_last_processed.image_grey.cols) / static_cast<float>(frame_last_processed.image_grey.rows));
+        const float ratio_screen = (static_cast<float>(width) / static_cast<float>(height));
         float image_width = 0;
         float image_height = 0;
         if (width > height) {
@@ -551,7 +551,7 @@ public:
         glLoadIdentity();
         // Rendering the image to the image texture.
         cv::Mat image;
-        cv::drawKeypoints(frame.image_grey, frame.kps, image);
+        cv::drawKeypoints(frame_last_processed.image_grey, frame_last_processed.kps, image);
         glBindTexture(GL_TEXTURE_2D, this->image_texture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -580,7 +580,7 @@ public:
         glDisable(GL_TEXTURE_2D);
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        gluPerspective(45, ((float)width / (float)height), 0.001, 1000.0);
+        gluPerspective(45, (static_cast<double>(width) / static_cast<double>(height)), 0.001, 1000.0);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         // Helper functions.
@@ -614,12 +614,12 @@ public:
         glTranslatef(0, 0, -5);
         // Data for rendering camera frustra.
         const int edges[12][2] = {{0, 1}, {0, 3}, {0, 4}, {2, 1}, {2, 3}, {2, 7}, {6, 3}, {6, 4}, {6, 7}, {5, 1}, {5, 4}, {5, 7}};
-        const float verticies[8][3] = {{1, -1, -0.9}, {1, 1, -0.9}, {-1, 1, -0.9}, {-1, -1, -0.9}, {0.1, -0.1, -0.1}, {0.1, 0.1, -0.1}, {-0.1, -0.1, -0.1}, {-0.1, 0.1, -0.1}};
+        const float verticies[8][3] = {{1.0f, -1.0f, -0.9f}, {1.0f, 1.0f, -0.9f}, {-1.0f, 1.0f, -0.9f}, {-1.0f, -1.0f, -0.9f}, {0.1f, -0.1f, -0.1f}, {0.1f, 0.1f, -0.1f}, {-0.1f, -0.1f, -0.1f}, {-0.1f, 0.1f, -0.1f}};
         // Render current camera.
-        const float scale_pose = 0.2;
+        const float scale_pose = 0.2f;
         glLineWidth(4);
         glBegin(GL_LINES);
-        glColor3f(0.5, 0.5, 0.0);
+        glColor3f(0.5f, 0.5f, 0.0f);
         for (int e = 0; e < 12; ++e) {
             for (int v = 0; v < 2; ++v) {
                 cv::Matx41f vertex = {
@@ -640,10 +640,10 @@ public:
         }
         glEnd();
         // Render other cameras.
-        float scale_camera = 0.2;
+        float scale_camera = 0.2f;
         glLineWidth(2);
         glBegin(GL_LINES);
-        glColor3f(0.0, 1.0, 0.0);
+        glColor3f(0.0f, 1.0f, 0.0f);
         for (const auto& [frame_id, frame] : mapp.frames) {
             for (int e = 0; e < 12; ++e) {
                 for (int v = 0; v < 2; ++v) {
@@ -672,7 +672,7 @@ public:
         for (size_t index = 1; index < mapp.frames.size(); ++index) {
             for (int offset = -1; offset < 1; ++offset) {
                 cv::Matx41f vertex = { 0, 0, 0, 1 };
-                const Frame& frame = mapp.frames.at(index + offset);
+                const Frame& frame = mapp.frames.at(static_cast<int>(index) + offset);
                 cv::Matx44f pose = opengl_coordinate_system(
                     rt_to_transform(
                         frame.rotation, 
@@ -688,8 +688,8 @@ public:
         glPointSize(10);
         glBegin(GL_POINTS);
         for (const auto& [landmark_id, landmark] : mapp.landmarks) {
-            glColor3f(landmark.colour(0), landmark.colour(1), landmark.colour(2));
-            glVertex3f(landmark.location(0), -landmark.location(1), -landmark.location(2));
+            glColor3d(landmark.colour(0), landmark.colour(1), landmark.colour(2));
+            glVertex3d(landmark.location(0), -landmark.location(1), -landmark.location(2));
         }
         glEnd();
         // Swap the buffers of the window.
@@ -713,12 +713,12 @@ int main(int argc, char* argv[]) {
     cv::VideoCapture capture(argv[1]);
     double F = std::atof(argv[2]);
     std::printf("Loading camera parameters...\n");
-    int width = capture.get(cv::CAP_PROP_FRAME_WIDTH);
-    int height = capture.get(cv::CAP_PROP_FRAME_HEIGHT);
-    int CNT = capture.get(cv::CAP_PROP_FRAME_COUNT);
+    int width = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_WIDTH));
+    int height = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_HEIGHT));
+    int frame_count = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_COUNT));
     cv::Matx33d K = {
-        F, 0, (double)width/2, 
-        0, F, (double)height/2, 
+        F, 0, static_cast<double>(width)/2.0,
+        0, F, static_cast<double>(height)/2.0,
         0, 0, 1
     };
     std::printf("Loading display [%d %d]...\n", width, height);
@@ -728,7 +728,7 @@ int main(int argc, char* argv[]) {
     std::printf("Processing frames...\n");
     int i = 0;
     while (capture.isOpened()) {
-        std::printf("Starting frame %d/%d\n", ++i, CNT);
+        std::printf("Starting frame %d/%d\n", ++i, frame_count);
         cv::Mat image;
         if (!capture.read(image)) {
             std::fprintf(stderr, "Failed to read frame.\n");
@@ -748,11 +748,11 @@ int main(int argc, char* argv[]) {
             std::chrono::duration<double> frame_duration = std::chrono::steady_clock::now() - start;
             std::printf("Rendering time: %f seconds\n", frame_duration.count());
         }
-        if (0) {
-            cv::Mat capture = display.capture();
-            cv::flip(capture, capture, 0);
-            static cv::VideoWriter video("output.avi", cv::VideoWriter::fourcc('M','J','P','G'), 10, cv::Size(capture.cols, capture.rows));
-            video.write(capture);
+        if  ((0)) {
+            cv::Mat screen_capture = display.capture();
+            cv::flip(screen_capture, screen_capture, 0);
+            static cv::VideoWriter video("output.avi", cv::VideoWriter::fourcc('M','J','P','G'), 10, cv::Size(screen_capture.cols, screen_capture.rows));
+            video.write(screen_capture);
         }
         std::printf("\n");
     }
