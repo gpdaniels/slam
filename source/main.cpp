@@ -238,7 +238,7 @@ public:
                 it = this->landmarks.erase(it);
                 continue;
             }
-            float reprojection_error;
+            float reprojection_error = 0.0f;
             for (const auto& [frame_id, kp_index] : landmark_observations) {
                 const Frame& frame = this->frames.at(frame_id);
                 const cv::Matx21d measured = {frame.kps[kp_index].pt.x, frame.kps[kp_index].pt.y};
