@@ -161,7 +161,7 @@ public:
             }
             const cv::Matx31d& cvpt = this->landmarks.at(landmark_id).location;
             const g2o::Vector3 pt(cvpt(0), cvpt(1), cvpt(2));
-            g2o::VertexPointXYZ* v_pt = new g2o::VertexPointXYZ();
+            g2o::VertexSBAPointXYZ* v_pt = new g2o::VertexSBAPointXYZ();
             v_pt->setId(landmark_id_start + landmark_id);
             v_pt->setEstimate(pt);
             v_pt->setMarginalized(true);
@@ -219,7 +219,7 @@ public:
             }
             else {
                 Landmark& landmark = this->landmarks.at(vertex_id - landmark_id_start);
-                const g2o::VertexPointXYZ* v_pt = static_cast<const g2o::VertexPointXYZ*>(vertex);
+                const g2o::VertexSBAPointXYZ* v_pt = static_cast<const g2o::VertexSBAPointXYZ*>(vertex);
                 Eigen::Map<Eigen::Vector3d>(landmark.location.val) = v_pt->estimate();
             }
         }
