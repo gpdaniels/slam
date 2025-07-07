@@ -21,5 +21,5 @@ mesalib = ">=24.1.0,<24.2"
 [tasks]
 clean     = { depends-on = [],            cmd = ["rm", "-rf", "BUILD"] }
 configure = { depends-on = [],            cmd = ["cmake", "-S .", "-B BUILD"], inputs = ["CMakeLists.txt"], outputs = ["BUILD/CMakeCache.txt", "BUILD/CMakeFiles/*"]}
-build     = { depends-on = ["configure"], cmd = ["cmake", "--build", "BUILD"], inputs = ["CMakeLists.txt", "source/*"], outputs = ["BUILD/TEMP"]}
-start     = { depends-on = ["build"],     cmd = ["BUILD/TEMP", "./videos/freiburgxyz_525.mp4", "525"]}
+build     = { depends-on = ["configure"], cmd = ["cmake", "--build", "BUILD"], inputs = ["CMakeLists.txt", "BUILD/CMakeCache.txt", "BUILD/CMakeFiles/*", "source/*"], outputs = ["BUILD/slam"]}
+start     = { depends-on = ["build"],     cmd = ["./BUILD/slam", "./videos/freiburgxyz_525.mp4", "525"]}
